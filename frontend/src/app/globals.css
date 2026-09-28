@@ -1,0 +1,146 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --dm-bg: #0a0e1a;
+  --dm-surface: #111827;
+  --dm-surface-2: #1a2235;
+  --dm-border: #1e2d45;
+  --dm-text: #e2e8f0;
+  --dm-text-muted: #64748b;
+  --dm-accent: #3b82f6;
+  --dm-accent-glow: rgba(59, 130, 246, 0.15);
+  --dm-green: #10b981;
+  --dm-red: #ef4444;
+  --dm-yellow: #f59e0b;
+  --dm-purple: #8b5cf6;
+  --dm-cyan: #06b6d4;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--dm-bg);
+  color: var(--dm-text);
+  font-family: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--dm-surface);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--dm-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--dm-text-muted);
+}
+
+/* Glass morphism */
+.glass {
+  background: rgba(17, 24, 39, 0.8);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--dm-border);
+}
+
+/* Glow effects */
+.glow-blue {
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.2);
+}
+.glow-green {
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.2);
+}
+.glow-red {
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.2);
+}
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Card hover */
+.card-hover {
+  transition: all 0.2s ease;
+}
+.card-hover:hover {
+  border-color: rgba(59, 130, 246, 0.4);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 32px rgba(59, 130, 246, 0.1);
+}
+
+/* Status badges */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* Animated gradient border */
+@keyframes borderGlow {
+  0%, 100% { border-color: rgba(59, 130, 246, 0.3); }
+  50% { border-color: rgba(139, 92, 246, 0.5); }
+}
+
+.animate-border-glow {
+  animation: borderGlow 3s ease-in-out infinite;
+}
+
+/* Pulse dot */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
+.pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* Timeline line */
+.timeline-item::before {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 24px;
+  bottom: -8px;
+  width: 2px;
+  background: linear-gradient(to bottom, var(--dm-border), transparent);
+}
+.timeline-item:last-child::before {
+  display: none;
+}
+
+/* Monospace */
+.mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Diff status colors */
+.diff-match { color: #10b981; }
+.diff-changed { color: #f59e0b; }
+.diff-missing { color: #ef4444; }
+.diff-added { color: #3b82f6; }
+.diff-unknown { color: #64748b; }
+
+/* Severity colors */
+.sev-high { color: #ef4444; }
+.sev-medium { color: #f59e0b; }
+.sev-low { color: #10b981; }
