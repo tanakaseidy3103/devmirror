@@ -4,7 +4,7 @@ DevMirror - SQLAlchemy データベースモデル
 import json
 from datetime import datetime
 
-from sqlalchemy import JSON, Column, DateTime, Enum, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, Column, DateTime, Enum, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -105,3 +105,32 @@ class IncidentModel(Base):
 
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=True)
     project = relationship("ProjectModel", back_populates="incidents")
+
+
+class MacHostModel(Base):
+    """Mac Bridge: 登録済みの Mac ビルドホスト（VM ではない）"""
+    __tablename__ = "mac_hosts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), unique=True, nullable=False)
+    hostname = Column(String(255), nullable=False)
+    port = Column(Integer, default=22, nullable=False)
+    username = Column(String(64), nullable=False)
+    # 秘密鍵そのものは保存しない。Windows 側の鍵ファイルのパスだけを持つ
+    key_path = Column(String(1024), nullable=False)
+    # ユーザーが Mac 上で確認した SHA256 フィンガープリント（ピン留め）
+    host_key_fingerprint = Column(String(64), nullable=False)
+    known_hosts_line = Column(Text, nullable=False)
+
+    enabled = Column(Boolean, default=True, nullable=False)
+    status = Column(String(32), default="unknown", nullable=False)
+    last_error = Column(Text, nullable=True)
+    last_checked_at = Column(DateTime, nullable=True)
+    last_connected_at = Column(DateTime, nullable=True)
+
+    # 最後に成功したプローブ結果
+    macos_version = Column(String(64), nullable=True)
+    xcode_version = Column(String(64), nullable=True)
+    probe = Column(JSON, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)

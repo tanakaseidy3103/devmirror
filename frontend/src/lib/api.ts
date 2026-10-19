@@ -179,6 +179,47 @@ export interface VmStatus {
   registered_vms?: string[];
 }
 
+export type MacHostStatus =
+  | "unknown" | "online" | "offline" | "auth_failed" | "host_key_mismatch" | "error" | "disconnected";
+
+export interface MacSimulator {
+  name: string;
+  udid: string;
+  state: string;
+  runtime: string;
+}
+
+export interface MacHost {
+  id: number;
+  name: string;
+  hostname: string;
+  port: number;
+  username: string;
+  host_key_fingerprint: string;
+  enabled: boolean;
+  status: MacHostStatus;
+  last_error: string | null;
+  last_checked_at: string | null;
+  last_connected_at: string | null;
+  macos_version: string | null;
+  xcode_version: string | null;
+  xcode_build: string | null;
+  arch: string | null;
+  disk_free_gb: number | null;
+  tools: string[];
+  simulators: MacSimulator[];
+  issues: string[];
+}
+
+export interface RegisterMacRequest {
+  name: string;
+  hostname: string;
+  port: number;
+  username: string;
+  key_path: string;
+  host_key_fingerprint: string;
+}
+
 // ─────────────────────────────────────────────
 // API 関数
 // ─────────────────────────────────────────────
@@ -245,4 +286,16 @@ export const api = {
       diff_id?: string;
       workflow?: string[];
     }>("/demo/dx-library", { method: "POST" }),
+
+  // Mac Bridge
+  listMacHosts: () => apiFetch<MacHost[]>("/mac-bridge/hosts"),
+  registerMacHost: (data: RegisterMacRequest) =>
+    apiFetch<MacHost>("/mac-bridge/hosts", { method: "POST", body: JSON.stringify(data) }),
+  testMacHost: (id: number) => apiFetch<MacHost>(`/mac-bridge/hosts/${id}/test`, { method: "POST" }),
+  disconnectMacHost: (id: number) =>
+    apiFetch<MacHost>(`/mac-bridge/hosts/${id}/disconnect`, { method: "POST" }),
+  deleteMacHost: async (id: number) => {
+    const res = await fetch(`${API_BASE}/api/v1/mac-bridge/hosts/${id}`, { method: "DELETE" });
+    if (!res.ok) throw new Error(`APIエラー (${res.status}): ${await res.text()}`);
+  },
 };

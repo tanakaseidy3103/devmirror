@@ -80,6 +80,20 @@ class Settings(BaseSettings):
     # 再実行のたびに VM を破棄しない（状態を残したい場合）
     VBOX_KEEP_VM: bool = False
 
+    # Mac Bridge（SSH 経由で実機 Mac に接続する）
+    # 空なら PATH の ssh / ssh-keyscan を使う（Windows 標準の OpenSSH クライアント）
+    MAC_BRIDGE_SSH_BINARY: str = "ssh"
+    MAC_BRIDGE_SSH_KEYSCAN_BINARY: str = "ssh-keyscan"
+    # known_hosts などを置くディレクトリ。空なら ~/.devmirror/mac-bridge
+    # （日本語を含むプロジェクトパスを ssh.exe に渡さないため、既定はホーム配下）
+    MAC_BRIDGE_DATA_DIR: str = ""
+    MAC_BRIDGE_CONNECT_TIMEOUT: int = 10
+    MAC_BRIDGE_COMMAND_TIMEOUT: int = 60
+    # ビルドに必要な最低空き容量（GB）
+    MAC_BRIDGE_MIN_FREE_GB: int = 20
+    # グローバル IP の Mac 登録を許可するか（既定は LAN / VPN のみ）
+    MAC_BRIDGE_ALLOW_PUBLIC_HOSTS: bool = False
+
     # CORS
     CORS_ORIGINS: List[str] = ["http://localhost:3000"]
 

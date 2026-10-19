@@ -9,6 +9,7 @@ from app.api.v1.endpoints import (
     fingerprints,
     diffs,
     incidents,
+    mac_bridge,
     projects,
     scanner,
     vm,
@@ -26,3 +27,4 @@ api_router.include_router(projects.router, prefix="/projects", tags=["Projects"]
 api_router.include_router(demo.router, prefix="/demo", tags=["Demo"])
 api_router.include_router(vm.router, prefix="/vm", tags=["VM"])
 api_router.include_router(vm_console.router, prefix="/vm", tags=["VM Console"])
+api_router.include_router(mac_bridge.router, prefix="/mac-bridge", tags=["Mac Bridge"])

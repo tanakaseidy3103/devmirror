@@ -11,6 +11,7 @@ import {
   FolderGit2,
   GitCompare,
   History,
+  Laptop,
   LayoutDashboard,
   Monitor,
   MonitorSmartphone,
@@ -35,6 +36,7 @@ const navigation = [
       { href: "/diff", label: "環境差分の比較", icon: GitCompare },
       { href: "/matrix", label: "環境マトリクス", icon: BarChart3 },
       { href: "/vm/console", label: "VM コンソール", icon: MonitorSmartphone },
+      { href: "/mac-bridge", label: "Mac接続管理", icon: Laptop },
     ],
   },
   {
