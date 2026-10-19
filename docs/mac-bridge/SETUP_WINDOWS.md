@@ -33,6 +33,18 @@ MAC_BRIDGE_SSH_BINARY=ssh
 MAC_BRIDGE_CONNECT_TIMEOUT=10
 MAC_BRIDGE_COMMAND_TIMEOUT=60
 MAC_BRIDGE_MIN_FREE_GB=20
+# ビルド対象として選べるフォルダ（JSON 配列）。未設定ならユーザーのホーム配下
+MAC_BRIDGE_PROJECT_ROOTS=["C:/Users/you/Projects"]
+MAC_BRIDGE_MAX_UPLOAD_MB=500
+MAC_BRIDGE_UPLOAD_TIMEOUT=600
+MAC_BRIDGE_BUILD_TIMEOUT=1800
+```
+
+バックエンドは必ず localhost で起動してください（Mac Bridge は localhost 以外からの要求を拒否します）:
+
+```powershell
+cd backend
+venv\Scripts\uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
 known_hosts は `%USERPROFILE%\.devmirror\mac-bridge\` に DevMirror 専用として保存されます。

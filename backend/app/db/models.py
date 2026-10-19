@@ -134,3 +134,40 @@ class MacHostModel(Base):
     probe = Column(JSON, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class MacBuildModel(Base):
+    """Mac Bridge: Xcode リモートビルドの 1 回分（準備 → ビルド → 結果）"""
+    __tablename__ = "mac_builds"
+
+    id = Column(String(32), primary_key=True)  # uuid4 hex。Mac 側の作業ディレクトリ名にも使う
+    host_id = Column(Integer, nullable=True, index=True)
+    host_name = Column(String(255), nullable=False)
+    source_path = Column(String(1024), nullable=False)
+    container = Column(String(512), nullable=False)
+    container_type = Column(String(16), nullable=False)  # project / workspace
+
+    # 準備（転送 + xcodebuild -list）で得た候補
+    schemes = Column(JSON, default=list)
+    configurations = Column(JSON, default=list)
+
+    scheme = Column(String(255), nullable=True)
+    configuration = Column(String(64), nullable=True)
+    destination = Column(String(255), nullable=True)
+    destination_label = Column(String(255), nullable=True)
+
+    # preparing / ready / running / succeeded / failed / cancelled / timeout / error / interrupted
+    status = Column(String(16), default="preparing", nullable=False)
+    exit_code = Column(Integer, nullable=True)
+    error_message = Column(Text, nullable=True)
+    errors = Column(JSON, default=list)
+    warning_count = Column(Integer, default=0)
+
+    macos_version = Column(String(64), nullable=True)
+    xcode_version = Column(String(64), nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    started_at = Column(DateTime, nullable=True)
+    finished_at = Column(DateTime, nullable=True)
+    duration_sec = Column(Float, nullable=True)
+    workspace_cleaned = Column(Boolean, default=False, nullable=False)

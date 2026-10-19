@@ -220,6 +220,43 @@ export interface RegisterMacRequest {
   host_key_fingerprint: string;
 }
 
+export type MacBuildStatus =
+  | "preparing" | "ready" | "running" | "succeeded" | "failed"
+  | "cancelled" | "timeout" | "error" | "interrupted";
+
+export interface XcodeContainer {
+  path: string;
+  type: "project" | "workspace";
+}
+
+export interface MacBuild {
+  id: string;
+  host_id: number | null;
+  host_name: string;
+  source_path: string;
+  container: string;
+  container_type: "project" | "workspace";
+  schemes: string[];
+  configurations: string[];
+  destinations: { id: string; label: string }[];
+  scheme: string | null;
+  configuration: string | null;
+  destination: string | null;
+  destination_label: string | null;
+  status: MacBuildStatus;
+  exit_code: number | null;
+  error_message: string | null;
+  errors: string[];
+  warning_count: number;
+  macos_version: string | null;
+  xcode_version: string | null;
+  created_at: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  duration_sec: number | null;
+  workspace_cleaned: boolean;
+}
+
 // ─────────────────────────────────────────────
 // API 関数
 // ─────────────────────────────────────────────
@@ -294,6 +331,23 @@ export const api = {
   testMacHost: (id: number) => apiFetch<MacHost>(`/mac-bridge/hosts/${id}/test`, { method: "POST" }),
   disconnectMacHost: (id: number) =>
     apiFetch<MacHost>(`/mac-bridge/hosts/${id}/disconnect`, { method: "POST" }),
+  inspectXcodeProject: (source_path: string) =>
+    apiFetch<{ source_path: string; containers: XcodeContainer[] }>("/mac-bridge/projects/inspect", {
+      method: "POST",
+      body: JSON.stringify({ source_path }),
+    }),
+  prepareMacBuild: (data: { host_id: number; source_path: string; container: string }) =>
+    apiFetch<MacBuild>("/mac-bridge/builds", { method: "POST", body: JSON.stringify(data) }),
+  listMacBuilds: () => apiFetch<MacBuild[]>("/mac-bridge/builds"),
+  getMacBuild: (id: string) => apiFetch<MacBuild>(`/mac-bridge/builds/${id}`),
+  getMacBuildLog: (id: string, offset: number) =>
+    apiFetch<{ text: string; offset: number; status: MacBuildStatus }>(
+      `/mac-bridge/builds/${id}/log?offset=${offset}`,
+    ),
+  startMacBuild: (id: string, data: { scheme: string; configuration: string; destination: string }) =>
+    apiFetch<MacBuild>(`/mac-bridge/builds/${id}/start`, { method: "POST", body: JSON.stringify(data) }),
+  cancelMacBuild: (id: string) => apiFetch<{ status: string }>(`/mac-bridge/builds/${id}/cancel`, { method: "POST" }),
+  cleanupMacBuild: (id: string) => apiFetch<MacBuild>(`/mac-bridge/builds/${id}/cleanup`, { method: "POST" }),
   deleteMacHost: async (id: number) => {
     const res = await fetch(`${API_BASE}/api/v1/mac-bridge/hosts/${id}`, { method: "DELETE" });
     if (!res.ok) throw new Error(`APIエラー (${res.status}): ${await res.text()}`);

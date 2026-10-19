@@ -93,6 +93,12 @@ class Settings(BaseSettings):
     MAC_BRIDGE_MIN_FREE_GB: int = 20
     # グローバル IP の Mac 登録を許可するか（既定は LAN / VPN のみ）
     MAC_BRIDGE_ALLOW_PUBLIC_HOSTS: bool = False
+    # ビルド対象として選択できる Windows 側のフォルダ。空ならユーザーのホーム配下
+    MAC_BRIDGE_PROJECT_ROOTS: List[str] = []
+    MAC_BRIDGE_MAX_UPLOAD_MB: int = 500
+    MAC_BRIDGE_UPLOAD_TIMEOUT: int = 600
+    MAC_BRIDGE_BUILD_TIMEOUT: int = 1800
+    MAC_BRIDGE_MAX_BUILD_LOG_MB: int = 20
 
     # CORS
     CORS_ORIGINS: List[str] = ["http://localhost:3000"]

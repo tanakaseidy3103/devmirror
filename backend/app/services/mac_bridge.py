@@ -23,6 +23,8 @@ import hashlib
 import ipaddress
 import json
 import re
+import shlex
+import socket
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
@@ -88,12 +90,38 @@ def validate_hostname(hostname: str) -> str:
     try:
         ip = ipaddress.ip_address(hostname)
     except ValueError:
-        return hostname  # shortcut: DNS 名は解決せず許可する。公開 IP 判定が必要なら解決して検査する
+        return hostname  # DNS 名は接続のたびに resolve_private_address で検査する
+    _reject_public(ip)
+    return hostname
+
+
+def _reject_public(ip: ipaddress._BaseAddress) -> None:
     if ip.is_global and not settings.MAC_BRIDGE_ALLOW_PUBLIC_HOSTS:
         raise MacBridgeError(
             "グローバル IP の Mac は登録できません。LAN または VPN（Tailscale 等）経由で接続してください"
         )
-    return hostname
+
+
+async def resolve_private_address(hostname: str) -> str:
+    """
+    ホスト名を解決し、全アドレスが LAN / VPN 内であることを確認して接続先 IP を返す。
+    ssh にはこの IP を渡す（検査後に DNS が変わっても公開ホストへ接続しない）。
+    """
+    validate_hostname(hostname)
+    try:
+        return str(ipaddress.ip_address(hostname))
+    except ValueError:
+        pass
+    try:
+        infos = await asyncio.get_running_loop().getaddrinfo(hostname, None, type=socket.SOCK_STREAM)
+    except OSError:
+        raise MacBridgeError("ホスト名を解決できません（Mac の電源・ネットワークを確認してください）")
+    addresses = list(dict.fromkeys(info[4][0] for info in infos))
+    if not addresses:
+        raise MacBridgeError("ホスト名を解決できません")
+    for a in addresses:
+        _reject_public(ipaddress.ip_address(a.split("%")[0]))
+    return addresses[0]
 
 
 def validate_username(username: str) -> str:
@@ -125,22 +153,23 @@ def fingerprint_of(key_b64: str) -> str:
     return "SHA256:" + base64.b64encode(digest).decode().rstrip("=")
 
 
-def known_hosts_host(hostname: str, port: int) -> str:
-    return hostname if port == 22 else f"[{hostname}]:{port}"
-
-
 # ─────────────────────────────────────────────
 # プロセス実行
 # ─────────────────────────────────────────────
 
-async def run_process(argv: list[str], timeout: float) -> tuple[int, str, str]:
+async def run_process(argv: list[str], timeout: float, stdin_path: Optional[Path] = None) -> tuple[int, str, str]:
     """argv を直接起動する（シェル不使用）。タイムアウト・キャンセル時は強制終了する。"""
-    proc = await asyncio.create_subprocess_exec(
-        *argv,
-        stdin=asyncio.subprocess.DEVNULL,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
+    stdin = open(stdin_path, "rb") if stdin_path else asyncio.subprocess.DEVNULL
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *argv,
+            stdin=stdin,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    finally:
+        if stdin_path:
+            stdin.close()
     try:
         out, err = await asyncio.wait_for(proc.communicate(), timeout)
     except asyncio.TimeoutError:
@@ -173,8 +202,9 @@ async def verify_host_key(hostname: str, port: int, expected_fp: str) -> str:
     一致するものを known_hosts 行として返す。一致しなければ拒否する。
     """
     timeout = settings.MAC_BRIDGE_CONNECT_TIMEOUT
+    address = await resolve_private_address(hostname)
     rc, out, err = await run_process(
-        [settings.MAC_BRIDGE_SSH_KEYSCAN_BINARY, "-T", str(timeout), "-p", str(port), hostname],
+        [settings.MAC_BRIDGE_SSH_KEYSCAN_BINARY, "-T", str(timeout), "-p", str(port), address],
         timeout + 5,
     )
     keys = []
@@ -188,7 +218,8 @@ async def verify_host_key(hostname: str, port: int, expected_fp: str) -> str:
     for key_type, key_b64 in keys:
         try:
             if fingerprint_of(key_b64) == expected_fp:
-                return f"{known_hosts_host(hostname, port)} {key_type} {key_b64}"
+                # ssh 側は HostKeyAlias=<hostname> で照合するため、ポートを付けずに記録する
+                return f"{hostname} {key_type} {key_b64}"
         except ValueError:
             continue
     logger.warning("ホスト鍵が一致しません", hostname=hostname, port=port)
@@ -201,7 +232,7 @@ async def verify_host_key(hostname: str, port: int, expected_fp: str) -> str:
 # 接続テスト・環境調査
 # ─────────────────────────────────────────────
 
-def build_ssh_argv(host, known_hosts_file: Path, remote_command: str) -> list[str]:
+def build_ssh_argv(host, known_hosts_file: Path, remote_command: str, address: str) -> list[str]:
     return [
         settings.MAC_BRIDGE_SSH_BINARY,
         "-F", "none",  # ユーザーの ~/.ssh/config（ProxyCommand 等）を読まない
@@ -212,12 +243,15 @@ def build_ssh_argv(host, known_hosts_file: Path, remote_command: str) -> list[st
         "-o", "StrictHostKeyChecking=yes",
         "-o", f"UserKnownHostsFile={known_hosts_file}",
         "-o", "GlobalKnownHostsFile=none",
+        # 接続先は検査済みの IP。ホスト鍵は登録時のホスト名で照合する
+        "-o", f"HostKeyAlias={host.hostname}",
+        "-o", "CheckHostIP=no",
         "-o", "IdentitiesOnly=yes",
         "-o", "PasswordAuthentication=no",
         "-o", "KbdInteractiveAuthentication=no",
         "-o", f"ConnectTimeout={settings.MAC_BRIDGE_CONNECT_TIMEOUT}",
         "--",
-        f"{host.username}@{host.hostname}",
+        f"{host.username}@{address}",
         remote_command,
     ]
 
@@ -299,15 +333,30 @@ def host_lock(host_id: int) -> asyncio.Lock:
     return _host_locks.setdefault(host_id, asyncio.Lock())
 
 
-async def probe_host(host) -> ProbeResult:
-    """登録済み Mac に接続し、固定の調査スクリプトだけを実行する。"""
-    validate_hostname(host.hostname)
+async def ssh_argv_for(host, remote_command: str) -> list[str]:
+    """
+    登録済み Mac 向けの ssh argv を作る。remote_command はこのパッケージ内で
+    組み立てた固定コマンド（値は検証済み・shlex.quote 済み）に限る。
+    """
     validate_username(host.username)
+    address = await resolve_private_address(host.hostname)
     known_hosts = data_dir() / f"known_hosts_{host.id}"
     # DB をピン留めの正とし、毎回書き出す（ファイルの改ざん・取り違えを防ぐ）
     known_hosts.write_text(host.known_hosts_line + "\n", encoding="utf-8")
+    return build_ssh_argv(host, known_hosts, remote_command, address)
 
-    argv = build_ssh_argv(host, known_hosts, PROBE_SCRIPT)
+
+def quote_all(argv: list[str]) -> str:
+    """リモートシェルへ渡す引数を 1 つずつクォートして連結する。"""
+    return " ".join(shlex.quote(a) for a in argv)
+
+
+async def probe_host(host) -> ProbeResult:
+    """登録済み Mac に接続し、固定の調査スクリプトだけを実行する。"""
+    try:
+        argv = await ssh_argv_for(host, PROBE_SCRIPT)
+    except MacBridgeError as e:
+        return ProbeResult("offline", str(e))
     try:
         rc, out, err = await run_process(argv, settings.MAC_BRIDGE_COMMAND_TIMEOUT)
     except MacBridgeError as e:

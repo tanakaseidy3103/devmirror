@@ -59,7 +59,12 @@ def fake_proc(monkeypatch, tmp_path):
             raise r
         return r
 
+    async def resolve(hostname):
+        mac_bridge.validate_hostname(hostname)
+        return "192.168.1.20"
+
     monkeypatch.setattr(mac_bridge, "run_process", fake)
+    monkeypatch.setattr(mac_bridge, "resolve_private_address", resolve)
     return calls, responses
 
 
@@ -139,8 +144,10 @@ async def test_verify_host_key_accepts_matching(fake_proc):
 
 
 async def test_verify_host_key_nonstandard_port(fake_proc):
+    # ssh は HostKeyAlias=<hostname> で照合するため、ポートは付けない
     line = await mac_bridge.verify_host_key("mac.local", 2222, KEY_FP)
-    assert line.startswith("[mac.local]:2222 ")
+    assert line.startswith("mac.local ssh-ed25519 ")
+    assert fake_proc[0][-1][-1] == "192.168.1.20"  # keyscan は検査済み IP へ
 
 
 async def test_verify_host_key_rejects_unknown(fake_proc):
@@ -221,7 +228,8 @@ async def test_register_and_test_connection(client, fake_proc, key_file):
     assert "StrictHostKeyChecking=yes" in argv and "BatchMode=yes" in argv
     assert "StrictHostKeyChecking=no" not in " ".join(argv)
     assert argv[-1] == mac_bridge.PROBE_SCRIPT  # 固定スクリプトのみ
-    assert argv[-2] == "eduardo@mac.local" and argv[-3] == "--"
+    assert argv[-2] == "eduardo@192.168.1.20" and argv[-3] == "--"  # 検査済み IP へ接続
+    assert "HostKeyAlias=mac.local" in argv
 
 
 async def test_register_rejects_wrong_fingerprint(client, fake_proc, key_file):
@@ -271,3 +279,45 @@ async def test_disconnect_and_delete(client, fake_proc, key_file):
 async def test_duplicate_name_rejected(client, fake_proc, key_file):
     assert (await client.post("/api/v1/mac-bridge/hosts", json=payload(key_file))).status_code == 201
     assert (await client.post("/api/v1/mac-bridge/hosts", json=payload(key_file))).status_code == 409
+
+
+# ─── DNS 解決後の公開 IP 拒否 ───
+
+def _fake_dns(monkeypatch, *addresses):
+    import socket
+
+    def getaddrinfo(host, *a, **kw):
+        if not addresses:
+            raise socket.gaierror("not found")
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, 0)) for ip in addresses]
+
+    monkeypatch.setattr(socket, "getaddrinfo", getaddrinfo)
+
+
+async def test_dns_name_resolving_to_public_ip_is_rejected(monkeypatch):
+    _fake_dns(monkeypatch, "93.184.216.34")
+    with pytest.raises(MacBridgeError, match="グローバル IP"):
+        await mac_bridge.resolve_private_address("evil.example.com")
+
+
+async def test_dns_name_with_any_public_address_is_rejected(monkeypatch):
+    _fake_dns(monkeypatch, "192.168.1.20", "93.184.216.34")
+    with pytest.raises(MacBridgeError):
+        await mac_bridge.resolve_private_address("mixed.example.com")
+
+
+async def test_dns_name_resolving_to_lan_returns_ip(monkeypatch):
+    _fake_dns(monkeypatch, "192.168.1.20")
+    assert await mac_bridge.resolve_private_address("my-mac.local") == "192.168.1.20"
+
+
+async def test_dns_unresolvable(monkeypatch):
+    _fake_dns(monkeypatch)
+    with pytest.raises(MacBridgeError, match="解決できません"):
+        await mac_bridge.resolve_private_address("nowhere.local")
+
+
+async def test_api_rejects_non_local_client(tmp_path):
+    transport = ASGITransport(app=app, client=("192.168.1.50", 5555))
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        assert (await ac.get("/api/v1/mac-bridge/hosts")).status_code == 403

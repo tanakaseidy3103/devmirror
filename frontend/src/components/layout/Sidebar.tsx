@@ -10,6 +10,7 @@ import {
   Clock,
   FolderGit2,
   GitCompare,
+  Hammer,
   History,
   Laptop,
   LayoutDashboard,
@@ -37,6 +38,7 @@ const navigation = [
       { href: "/matrix", label: "環境マトリクス", icon: BarChart3 },
       { href: "/vm/console", label: "VM コンソール", icon: MonitorSmartphone },
       { href: "/mac-bridge", label: "Mac接続管理", icon: Laptop },
+      { href: "/mac-bridge/builds", label: "Xcodeリモートビルド", icon: Hammer },
     ],
   },
   {
@@ -59,6 +61,11 @@ const navigation = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  // 前方一致する項目のうち最も具体的なもの（/mac-bridge/builds で /mac-bridge を光らせない）
+  const activeHref = navigation
+    .flatMap((group) => group.items.map((item) => item.href))
+    .filter((href) => pathname === href || (href !== "/" && pathname.startsWith(href + "/")))
+    .sort((x, y) => y.length - x.length)[0];
 
   return (
     <aside className="fixed left-0 top-0 h-full w-64 bg-dm-surface border-r border-dm-border flex flex-col z-50">
@@ -88,7 +95,7 @@ export function Sidebar() {
             <ul className="space-y-0.5">
               {group.items.map((item) => {
                 const Icon = item.icon;
-                const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
+                const isActive = item.href === activeHref;
                 return (
                   <li key={item.href}>
                     <Link
